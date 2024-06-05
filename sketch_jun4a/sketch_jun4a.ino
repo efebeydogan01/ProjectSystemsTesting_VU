@@ -11,22 +11,26 @@
 #define K2 1.33342e-7
 #define kelvin 273.15
 #define maxSize 30
+#define salConst1 15.1747217178
+#define salConst2 2.89491343498
 
 // Connect via i2c, default address #0 (A0-A2 not jumpered)
 Adafruit_LiquidCrystal lcd(0);
 
-long curSize = 0;
-double runningAvg[maxSize];
+long tempSize = 0;
+long salSize = 0;
+double runningAvgTemp[maxSize];
+double runningAvgSal[maxSize];
 
-void addToArr(double temperature) {
-  runningAvg[curSize % maxSize] = temperature;
-  curSize++;
+void addToArr(double* arr, double val, long& size) {
+  arr[size % maxSize] = val;
+  size = size + 1;
 }
 
-double calculateAvg() {
+double calculateAvg(double* arr, long size) {
   long boundary = 0;
-  if (curSize < 30) {
-    boundary = curSize;
+  if (size < 30) {
+    boundary = size;
   }
   else {
     boundary = maxSize;
@@ -34,7 +38,7 @@ double calculateAvg() {
 
   double res = 0;
   for (long i = 0; i < boundary; i++) {
-    res += runningAvg[i];
+    res += arr[i];
   }
 
   return res / boundary;
@@ -48,13 +52,45 @@ double getTemp(int tempSensorVal) {
   return celsius;
 }
 
+double getSalinity(int salSensorVal) {
+  double Vout = salSensorVal * 5.0/3;
+  double salinity = Vout * 16.3;
+  return salinity;
+}
+
+void readAndPrintTemp() {
+  int tempSensor = analogRead(TEMP_SENSOR);
+  double temperature = getTemp(tempSensor);
+  addToArr(runningAvgTemp, temperature, tempSize);
+  double tempAverage = calculateAvg(runningAvgTemp, tempSize);
+
+  lcd.setCursor(0, 1);
+  lcd.print("Temperature: ");
+  lcd.print(tempAverage);
+  Serial.print("Temperature: ");
+  Serial.println(tempAverage, 3);
+}
+
+void readAndPrintSalinity() {
+  int salSensor = analogRead(SAL_SENSOR);
+  double salinity = getSalinity(salSensor);
+  addToArr(runningAvgSal, salinity, salSize);
+  double salAverage = calculateAvg(runningAvgSal, salSize);
+
+  Serial.print("Salinity: ");
+  Serial.println(salAverage, 3);
+  lcd.setCursor(0, 0);
+  lcd.print("Salinity: ");
+  lcd.print(salAverage);
+}
+
 void setup() {
   Serial.begin(115200);
   // while(!Serial);
   Serial.println("LCD Character Backpack I2C Test.");
 
   // set up the LCD's number of rows and columns:
-  if (!lcd.begin(16, 2)) {
+  if (!lcd.begin(30, 2)) {
     Serial.println("Could not init backpack. Check wiring.");
     while(1);
   }
@@ -62,16 +98,8 @@ void setup() {
 }
 
 void loop() {
-  // set the cursor to column 0, line 1
-  // (note: line 1 is the second row, since counting begins with 0):
-  lcd.setCursor(0, 1);
+  // readAndPrintTemp();
+  readAndPrintSalinity();
 
-  int tempSensor = analogRead(TEMP_SENSOR);
-  double temperature = getTemp(tempSensor);
-  addToArr(temperature);
-  double tempAverage = calculateAvg();
-  lcd.print(tempAverage);
-  Serial.print("Temperature: ");
-  Serial.println(tempAverage, 3);
   delay(500);
 }
