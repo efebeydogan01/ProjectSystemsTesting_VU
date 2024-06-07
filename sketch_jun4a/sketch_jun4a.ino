@@ -79,6 +79,12 @@
 #define COMPRESS 0
 #define DECOMPRESS 1
 
+#define TEMP_LOWER_BOUND 30
+#define TEMP_UPPER_BOUND 40
+
+#define SAL_LOWER_BOUND 10
+#define SAL_UPPER_BOUND 20
+
 // Connect via i2c, default address #0 (A0-A2 not jumpered)
 Adafruit_LiquidCrystal lcd(0);
 
@@ -108,13 +114,7 @@ double calculateAvg(double* arr, long size) {
   return res / boundary;
 }
 
-double getTemp(int tempSensorVal) {
-  double voltageOut = (tempSensorVal / 1024.0) * 3.3;
-  double rt = voltageOut * R1 / (Vin * (1 - voltageOut / Vin));
-  double T = 1.0 / (K0 + K1 * log(rt) + K2 * log(rt) * log(rt) * log(rt));
-  double celsius = T - kelvin;
-  return celsius;
-}
+// SALINITY FUNCTIONS
 
 double getSalinity(int salSensorVal) {
   double Varduino = salSensorVal * (3.3 / 1024.0);  // convert to voltage (0-3.3V)
@@ -125,30 +125,122 @@ double getSalinity(int salSensorVal) {
   return salinity;
 }
 
-void readAndPrintTemp() {
+double readSalinity() {
+  int salSensor = analogRead(SAL_SENSOR);
+  double salinity = getSalinity(salSensor);
+  addToArr(runningAvgSal, salinity, salSize);
+  double salAverage = calculateAvg(runningAvgSal, salSize);
+
+  return salAverage;
+}
+
+void readAndPrintSalinity() {
+  double salAverage = readSalinity();
+
+  // Serial.print("Salinity: ");
+  // Serial.println(salAverage, 3);
+  lcd.setCursor(0, 1);
+  lcd.print("Salinity: ");
+  lcd.print(salAverage);
+}
+
+void salinityOperations() {
+  double curSal = readSalinity();
+  String formatSal = String(curSal, 1);
+  lcd.setCursor(7, 0);
+  lcd.print("|S: ");
+  lcd.print(formatSal);
+
+  if (curSal < SAL_LOWER_BOUND) {
+    // lcd.setCursor(7, 0);
+    // lcd.print("|Sal low!");
+    lcd.setCursor(7, 1);
+    lcd.print("|Add salt");
+    delay(2000);
+
+    lcd.setCursor(7, 1);
+    lcd.print("|ADJ VALV");
+    delay(5000);
+
+    activate_motor(MOTOR_B, COMPRESS, NUMBER_OF_STEPS);
+    delay(2000);
+    activate_motor(MOTOR_B, DECOMPRESS, NUMBER_OF_STEPS);
+  } else if (curSal >= SAL_LOWER_BOUND && curSal <= SAL_UPPER_BOUND) {
+    // lcd.setCursor(7, 0);
+    // lcd.print("|Sal norm");
+    delay(2000);
+  } else {
+    // lcd.setCursor(7, 0);
+    // lcd.print("|Sal hi!");
+    lcd.setCursor(7, 1);
+    lcd.print("|Add fres");
+    delay(2000);
+
+    lcd.setCursor(7, 1);
+    lcd.print("|ADJ VALV");
+    delay(5000);
+
+    activate_motor(MOTOR_A, DECOMPRESS, NUMBER_OF_STEPS);
+    delay(1000);
+    activate_motor(MOTOR_B, COMPRESS, NUMBER_OF_STEPS);
+  }
+}
+
+// TEMPERATURE FUNCTIONS
+
+double getTemp(int tempSensorVal) {
+  double voltageOut = (tempSensorVal / 1024.0) * 3.3;
+  double rt = voltageOut * R1 / (Vin * (1 - voltageOut / Vin));
+  double T = 1.0 / (K0 + K1 * log(rt) + K2 * log(rt) * log(rt) * log(rt));
+  double celsius = T - kelvin;
+  return celsius;
+}
+
+double readTemp() {
   int tempSensor = analogRead(TEMP_SENSOR);
   double temperature = getTemp(tempSensor);
   addToArr(runningAvgTemp, temperature, tempSize);
   double tempAverage = calculateAvg(runningAvgTemp, tempSize);
+
+  return tempAverage;
+}
+
+void tempOperations() {
+  double curTemp = readTemp();
+  String formatTemp = String(curTemp, 1);
+  lcd.setCursor(0, 0);
+  lcd.print("T: ");
+  lcd.print(formatTemp);
+
+  if (curTemp < TEMP_LOWER_BOUND) {
+    // lcd.setCursor(0, 0);
+    // lcd.print("Tmp low");
+    lcd.setCursor(0, 1);
+    lcd.print("Htr on");
+    digitalWrite(HEATER, HIGH);
+  } else if (TEMP_LOWER_BOUND <= curTemp && curTemp <= TEMP_UPPER_BOUND) {
+    digitalWrite(HEATER, LOW);
+    // lcd.setCursor(0, 0);
+    // lcd.print("Tmp nrml");
+    lcd.setCursor(0, 1);
+    lcd.print("Htr off");
+  } else {
+    // lcd.setCursor(0, 0);
+    // lcd.print("Tmp hi!");
+    lcd.setCursor(0, 1);
+    lcd.print("Add ice");
+  }
+  delay(2000);
+}
+
+void readAndPrintTemp() {
+  double tempAverage = readTemp();
 
   lcd.setCursor(0, 0);
   lcd.print("Temperat: ");
   lcd.print(tempAverage);
   Serial.print("Temperature: ");
   Serial.println(tempAverage, 3);
-}
-
-void readAndPrintSalinity() {
-  int salSensor = analogRead(SAL_SENSOR);
-  double salinity = getSalinity(salSensor);
-  addToArr(runningAvgSal, salinity, salSize);
-  double salAverage = calculateAvg(runningAvgSal, salSize);
-
-  // Serial.print("Salinity: ");
-  // Serial.println(salAverage, 3);
-  lcd.setCursor(0, 0);
-  lcd.print("Salinity: ");
-  lcd.print(salAverage);
 }
 
 void setup() {
@@ -172,8 +264,8 @@ void setup() {
   pinMode(HEATER, OUTPUT);
 
   // pinMode(POT, INPUT);
-  // pinMode(BUZ, OUTPUT);
-  // digitalWrite(BUZ, LOW);
+  pinMode(BUZ, OUTPUT);
+  digitalWrite(BUZ, LOW);
 }
 
 void readAndPrintSwitches3and4() {
@@ -253,11 +345,16 @@ void testMotorsOperation() {
 }
 
 void loop() {
-  readAndPrintTemp(); // working (can be used as unit test)
-  readAndPrintSalinity();  // working (can be used as unit test)
+  // check temp
+  tempOperations();
+
+  // check salinity
+  salinityOperations();
+
+  // readAndPrintTemp(); // working (can be used as unit test)
+  // readAndPrintSalinity();  // working (can be used as unit test)
   // readAndPrintSwitches3and4();  // working (can be used as unit test) -> will use for pumps
   // readAndPrintSwitch2();  // working (can be used as unit test) -> will use for heater
   // testMotorsOperation(); // working (can be used as unit test) TODO set it up to work with switches
   // testHeaterOperation(); // working with Switch 2 (can be used as unit test)
-  
 }
