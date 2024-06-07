@@ -319,7 +319,9 @@ void readAndPrintSwitch2() {
 }
 
 void activate_motor(bool motorId, bool direction, int number_of_steps) {
-  if (motorId) {
+  Serial.print(motorId);
+  Serial.println(direction);
+  if (!motorId) {
     if (direction == COMPRESS && freshPumpPosition >= MAX_STEPS) {
       lcd.setCursor(7, 0);
       lcd.print("|LIMIT   ");
@@ -370,7 +372,7 @@ void activate_motor(bool motorId, bool direction, int number_of_steps) {
   // Disable motor
   digitalWrite(enablePin, HIGH);
 
-  if (motorId) {
+  if (!motorId) {
     if (direction == COMPRESS) {
       // freshCyclesForward += number_of_steps;
       freshPumpPosition += number_of_steps;
@@ -411,17 +413,14 @@ void operateMotorSuckWithSwitches3and4() {
                                 // Enable motor
     // digitalWrite(MOT_A_EN, LOW);
     activate_motor(MOTOR_A, DECOMPRESS, STEPS_BY_HAND);
-  } else {
-    // Disable motor
-    // digitalWrite(MOT_A_EN, HIGH);
   }
+
   if (!digitalRead(SWITCH4)) {  // sw4 press
                                 // lcd.print("SW4 HIGH");
     // digitalWrite(MOT_B_EN, LOW);
     activate_motor(MOTOR_B, DECOMPRESS, STEPS_BY_HAND);
-  } else {
-    // digitalWrite(MOT_B_EN, HIGH);
   }
+  
 }
 
 
@@ -474,5 +473,7 @@ void loop() {
   Serial.print("Fresh pos: ");
   Serial.print(freshPumpPosition);
   Serial.print(" Saline pos: ");
-  Serial.println(salinePumpPosition);
+  Serial.print(salinePumpPosition);
+  Serial.print(" Current vol added: ");
+  Serial.println(curVolume);
 }
