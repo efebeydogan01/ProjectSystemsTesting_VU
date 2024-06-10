@@ -1,7 +1,7 @@
 #include <math.h>
 #include "Adafruit_LiquidCrystal.h"
 
-// NOTE: Always start the prgoram with the switch 1 down and birng back the syringes to most back, then turn switch 1 up
+// NOTE: Always start the prgoram with the switch 1 down and bring back the syringes to most back, then turn switch 1 up
 // Wire connections:
 
 // For the Temperature sensor (blue cable):
