@@ -112,7 +112,8 @@ int freshPumpPosition = 0;
 int salinePumpPosition = 0;
 double curVolume = 0;
 bool salinityOutOfRange = false;
-bool isPumpAtLimit = false;
+bool isFreshPumpAtLimit = false;
+bool isSaltPumpAtLimit = false;
 
 void cleanLCDArea(int rowPos, int row, int numSpaces) {
   char* buf = new char[numSpaces + 1];
@@ -193,7 +194,7 @@ void salinityOperations() {
     if (curSal < SAL_LOWER_BOUND) {
       // lcd.setCursor(7, 0);
       // lcd.print("|Sal low!");
-      if (!isPumpAtLimit) {
+      if (!isSaltPumpAtLimit) {
         lcd.setCursor(7, 1);
         lcd.print("|Add salt");
       }
@@ -213,7 +214,7 @@ void salinityOperations() {
     } else {
       // lcd.setCursor(7, 0);
       // lcd.print("|Sal hi!");
-      if (!isPumpAtLimit) {
+      if (!isFreshPumpAtLimit) {
         lcd.setCursor(7, 1);
         lcd.print("|Add fres");
       }
@@ -427,11 +428,18 @@ void activate_motor(bool motorId, bool direction, int number_of_steps) {
   }
 
   if (number_of_steps == 0) {
-    isPumpAtLimit = true;
+    if (motorId == SALT_PUMP)
+      isSaltPUmpAtLimit = true;
+    if (motorId == FRESH_PUMP)
+      isFreshPumpAtLimit = true;
     printLimit();
     return;
   }
-  isPumpAtLimit = false;
+  
+  if (motorId == SALT_PUMP)
+    isSaltPUmpAtLimit = false;
+  if (motorId == FRESH_PUMP)
+    isFreshPumpAtLimit = false;
 
   if (direction == COMPRESS && curVolume + ONE_STEP_VOL * number_of_steps >= MAX_VOL_ADDITION) {
     lcd.setCursor(7, 0);
