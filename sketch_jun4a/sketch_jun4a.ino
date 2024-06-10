@@ -1,6 +1,7 @@
 #include <math.h>
 #include "Adafruit_LiquidCrystal.h"
 
+// NOTE: Always start the prgoram with the switch 1 down and birng back the syringes to most back, then turn switch 1 up
 // Wire connections:
 
 // For the Temperature sensor (blue cable):
@@ -16,7 +17,7 @@
 // GND -> GND (on the right) (red cable)
 
 // For the Switches (yellow cables):
-// D5 -> SW1
+// D4 -> SW1
 // D5 -> SW2
 // D6 -> SW3
 // D7 -> SW4
@@ -70,10 +71,13 @@
 
 #define STEP_DELAY 1000
 #define NUMBER_OF_STEPS 10000
-#define STEPS_BY_HAND 1500
+#define STEPS_BY_HAND 1000
 
 #define MOTOR_A 0
 #define MOTOR_B 1
+
+#define FRESH_PUMP 0
+#define SALT_PUMP 1
 
 #define COMPRESS 0
 #define DECOMPRESS 1
@@ -90,6 +94,8 @@
 #define INITIAL_BEAKER_VOL 500
 #define MAX_VOL_ADDITION 300
 
+#define HEATER_ENABLED true
+
 // Connect via i2c, default address #0 (A0-A2 not jumpered)
 Adafruit_LiquidCrystal lcd(0);
 
@@ -105,6 +111,19 @@ double runningAvgSal[maxSize];
 int freshPumpPosition = 0;
 int salinePumpPosition = 0;
 double curVolume = 0;
+bool salinityOutOfRange = false;
+bool isPumpAtLimit = false;
+
+void cleanLCDArea(int rowPos, int row, int numSpaces) {
+  char* buf = new char[numSpaces + 1];
+  for (int i = 0; i < numSpaces; i++) {
+    buf[i] = ' ';
+  }
+  buf[numSpaces] = '\0';
+  lcd.setCursor(rowPos, row);
+  lcd.print(buf);
+  delete[] buf;
+}
 
 void addToArr(double* arr, double val, long& size) {
   arr[size % maxSize] = val;
@@ -132,9 +151,9 @@ double calculateAvg(double* arr, long size) {
 double getSalinity(int salSensorVal) {
   double Varduino = salSensorVal * (3.3 / 1024.0);  // convert to voltage (0-3.3V)
   double Vout = Varduino * (5.0 / 3.0);
-  double salinity = 15.1747217178 * Vout - 2.89491343498;  // more accurate way
-  if (salinity < 0) salinity = 0;
-  // double salinity = 16.3 * Vout; // less accurate way
+  // double salinity = 15.1747217178 * Vout - 2.89491343498;  // more accurate way
+  // if (salinity < 0) salinity = 0;
+  double salinity = 16.3 * Vout;  // less accurate way
   return salinity;
 }
 
@@ -164,39 +183,54 @@ void salinityOperations() {
   lcd.print("|S: ");
   lcd.print(curSal);
   lcd.print(" ");
-  delay(3000);
+  Serial.print("SW3-4: ");
+  Serial.print(isSwitch3or4Down());
+  Serial.print(" SW1: ");
+  Serial.println(isSwitch1Down());
 
-  if (curSal < SAL_LOWER_BOUND) {
-    // lcd.setCursor(7, 0);
-    // lcd.print("|Sal low!");
-    lcd.setCursor(7, 1);
-    lcd.print("|Add salt");
-    // delay(2000);
+  if (!isSwitch3or4Down() && !isSwitch1Down()) {
+    Serial.println("IF");
+    if (curSal < SAL_LOWER_BOUND) {
+      // lcd.setCursor(7, 0);
+      // lcd.print("|Sal low!");
+      if (!isPumpAtLimit) {
+        lcd.setCursor(7, 1);
+        lcd.print("|Add salt");
+      }
+      // delay(2000);
 
-    lcd.setCursor(7, 0);
-    lcd.print("|ADJ VALV");
-    delay(5000);
+      if (!salinityOutOfRange) {
+        lcd.setCursor(7, 0);
+        lcd.print("|ADJ VALV");
+        delay(5000);
+        salinityOutOfRange = true;
+      }
 
-    activate_motor(MOTOR_B, COMPRESS, NUMBER_OF_STEPS);
-    // activate_motor(MOTOR_B, DECOMPRESS, NUMBER_OF_STEPS);
-  } else if (curSal >= SAL_LOWER_BOUND && curSal <= SAL_UPPER_BOUND) {
-    // lcd.setCursor(7, 0);
-    // lcd.print("|Sal norm");
-    // delay(2000);
-  } else {
-    // lcd.setCursor(7, 0);
-    // lcd.print("|Sal hi!");
-    lcd.setCursor(7, 1);
-    lcd.print("|Add fres");
-    // delay(2000);
+      activate_motor(MOTOR_B, COMPRESS, NUMBER_OF_STEPS);
+      // activate_motor(MOTOR_B, DECOMPRESS, NUMBER_OF_STEPS);
+    } else if (curSal >= SAL_LOWER_BOUND && curSal <= SAL_UPPER_BOUND) {
+      salinityOutOfRange = false;
+    } else {
+      // lcd.setCursor(7, 0);
+      // lcd.print("|Sal hi!");
+      if (!isPumpAtLimit) {
+        lcd.setCursor(7, 1);
+        lcd.print("|Add fres");
+      }
+      // delay(2000);
 
-    lcd.setCursor(7, 0);
-    lcd.print("|ADJ VALV");
-    delay(5000);
+      if (!salinityOutOfRange) {
+        lcd.setCursor(7, 0);
+        lcd.print("|ADJ VALV");
+        delay(5000);
+        salinityOutOfRange = true;
+      }
 
-    // activate_motor(MOTOR_A, DECOMPRESS, NUMBER_OF_STEPS);
-    // delay(1000);
-    activate_motor(MOTOR_B, COMPRESS, NUMBER_OF_STEPS);
+
+      // activate_motor(MOTOR_A, DECOMPRESS, NUMBER_OF_STEPS);
+      // delay(1000);
+      activate_motor(MOTOR_A, COMPRESS, NUMBER_OF_STEPS);
+    }
   }
 }
 
@@ -226,23 +260,25 @@ void tempOperations() {
   lcd.print("T: ");
   lcd.print(formatTemp);
 
-  if (curTemp < TEMP_LOWER_BOUND) {
-    // lcd.setCursor(0, 0);
-    // lcd.print("Tmp low");
-    lcd.setCursor(0, 1);
-    lcd.print("Htr on ");
-    digitalWrite(HEATER, HIGH);
-  } else if (TEMP_LOWER_BOUND <= curTemp && curTemp <= TEMP_UPPER_BOUND) {
-    digitalWrite(HEATER, LOW);
-    // lcd.setCursor(0, 0);
-    // lcd.print("Tmp nrml");
-    lcd.setCursor(0, 1);
-    lcd.print("Htr off");
-  } else {
-    // lcd.setCursor(0, 0);
-    // lcd.print("Tmp hi!");
-    lcd.setCursor(0, 1);
-    lcd.print("Add ice");
+  if (HEATER_ENABLED) {
+    if (curTemp < TEMP_LOWER_BOUND) {
+      // lcd.setCursor(0, 0);
+      // lcd.print("Tmp low");
+      lcd.setCursor(0, 1);
+      lcd.print("Htr on ");
+      digitalWrite(HEATER, HIGH);
+    } else if (TEMP_LOWER_BOUND <= curTemp && curTemp <= TEMP_UPPER_BOUND) {
+      digitalWrite(HEATER, LOW);
+      // lcd.setCursor(0, 0);
+      // lcd.print("Tmp nrml");
+      lcd.setCursor(0, 1);
+      lcd.print("Htr off");
+    } else {
+      // lcd.setCursor(0, 0);
+      // lcd.print("Tmp hi!");
+      lcd.setCursor(0, 1);
+      lcd.print("Add ice");
+    }
   }
   // delay(2000);
 }
@@ -280,6 +316,9 @@ void setup() {
   // pinMode(POT, INPUT);
   pinMode(BUZ, OUTPUT);
   digitalWrite(BUZ, LOW);
+
+  if (!HEATER_ENABLED)
+    digitalWrite(HEATER, LOW);
 }
 
 void readAndPrintSwitches3and4() {
@@ -296,6 +335,10 @@ void readAndPrintSwitches3and4() {
   }
   // Serial.print("Potentiometer: ");
   // Serial.println(analogRead(POT));
+}
+
+bool isSwitch1Down() {
+  return digitalRead(SWITCH1);
 }
 
 void testHeaterOperation() {
@@ -318,31 +361,78 @@ void readAndPrintSwitch2() {
   }
 }
 
-void activate_motor(bool motorId, bool direction, int number_of_steps) {
-  Serial.print(motorId);
-  Serial.println(direction);
+bool checkLimitsValid(bool motorId, bool direction, int number_of_steps) {
   if (!motorId) {
-    if (direction == COMPRESS && freshPumpPosition >= MAX_STEPS) {
-      lcd.setCursor(7, 0);
-      lcd.print("|LIMIT   ");
-      return;
-    } else if (direction == DECOMPRESS && freshPumpPosition <= 0) {
-      lcd.setCursor(7, 0);
-      lcd.print("|LIMIT   ");
-      return;
+    if (direction == COMPRESS && freshPumpPosition + number_of_steps >= MAX_STEPS) {
+      return false;
+    } else if (direction == DECOMPRESS && freshPumpPosition - number_of_steps <= 0) {
+      return false;
     }
   } else {
-    if (direction == COMPRESS && salinePumpPosition >= MAX_STEPS) {
-      lcd.setCursor(7, 0);
-      lcd.print("|LIMIT   ");
-      return;
-    } else if (direction == DECOMPRESS && salinePumpPosition <= 0) {
-      lcd.setCursor(7, 0);
-      lcd.print("|LIMIT   ");
-      return;
+    if (direction == COMPRESS && salinePumpPosition + number_of_steps >= MAX_STEPS) {
+      return false;
+    } else if (direction == DECOMPRESS && salinePumpPosition - number_of_steps <= 0) {
+      return false;
     }
   }
-  
+  return true;
+}
+
+void calculatePositions(bool motorId, bool direction, int number_of_steps) {
+  if (!motorId) {
+    if (direction == COMPRESS) {
+      // freshCyclesForward += number_of_steps;
+      freshPumpPosition += number_of_steps;
+    } else {
+      // freshCyclesBackwards += number_of_steps;
+      freshPumpPosition -= number_of_steps;
+    }
+  } else {
+    if (direction == COMPRESS) {
+      // salineCyclesForward += number_of_steps;
+      salinePumpPosition += number_of_steps;
+    } else {
+      // salineCyclesBackwards += number_of_steps;
+      salinePumpPosition -= number_of_steps;
+    }
+  }
+}
+
+void printLimit() {
+  lcd.setCursor(7, 1);
+  lcd.print("|LIMIT   ");
+  delay(2000);
+  cleanLCDArea(7, 1, 9);
+}
+
+void activate_motor(bool motorId, bool direction, int number_of_steps) {
+  // Serial.print(motorId);
+  // Serial.println(direction);
+  if (!isSwitch1Down()) {
+    if (!checkLimitsValid(motorId, direction, number_of_steps)) {
+      if (motorId == FRESH_PUMP) {
+        if (direction == COMPRESS) {
+          number_of_steps = MAX_STEPS - freshPumpPosition;
+        } else {
+          number_of_steps = freshPumpPosition;
+        }
+      } else {
+        if (direction == COMPRESS) {
+          number_of_steps = MAX_STEPS - salinePumpPosition;
+        } else {
+          number_of_steps = salinePumpPosition;
+        }
+      }
+    }
+  }
+
+  if (number_of_steps == 0) {
+    isPumpAtLimit = true;
+    printLimit();
+    return;
+  }
+  isPumpAtLimit = false;
+
   if (direction == COMPRESS && curVolume + ONE_STEP_VOL * number_of_steps >= MAX_VOL_ADDITION) {
     lcd.setCursor(7, 0);
     lcd.print("|OVERFLOW");
@@ -372,22 +462,10 @@ void activate_motor(bool motorId, bool direction, int number_of_steps) {
   // Disable motor
   digitalWrite(enablePin, HIGH);
 
-  if (!motorId) {
-    if (direction == COMPRESS) {
-      // freshCyclesForward += number_of_steps;
-      freshPumpPosition += number_of_steps;
-    } else {
-      // freshCyclesBackwards += number_of_steps;
-      freshPumpPosition -= number_of_steps;
-    }
-  } else {
-    if (direction == COMPRESS) {
-      // salineCyclesForward += number_of_steps;
-      salinePumpPosition += number_of_steps;
-    } else {
-      // salineCyclesBackwards += number_of_steps;
-      salinePumpPosition -= number_of_steps;
-    }
+  if (!isSwitch1Down()) {
+    calculatePositions(motorId, direction, number_of_steps);
+    if (direction == COMPRESS)
+      curVolume += ONE_STEP_VOL * number_of_steps;
   }
 }
 
@@ -406,7 +484,7 @@ void testMotorsOperation() {
   activate_motor(MOTOR_B, DECOMPRESS, NUMBER_OF_STEPS);
 }
 
-bool isSucking() {
+bool isSwitch3or4Down() {
   return !digitalRead(SWITCH3) || !digitalRead(SWITCH4);
 }
 
@@ -417,14 +495,15 @@ void operateMotorSuckWithSwitches3and4() {
                                 // Enable motor
     // digitalWrite(MOT_A_EN, LOW);
     activate_motor(MOTOR_A, DECOMPRESS, STEPS_BY_HAND);
+    salinityOutOfRange = false;
   }
 
   if (!digitalRead(SWITCH4)) {  // sw4 press
                                 // lcd.print("SW4 HIGH");
     // digitalWrite(MOT_B_EN, LOW);
     activate_motor(MOTOR_B, DECOMPRESS, STEPS_BY_HAND);
+    salinityOutOfRange = false;
   }
-  
 }
 
 void operateMotorPumpWithSwitches3and4() {
@@ -435,6 +514,7 @@ void operateMotorPumpWithSwitches3and4() {
     int enablePin = MOT_A_EN;
     digitalWrite(enablePin, LOW);
     activate_motor(MOTOR_A, COMPRESS, STEPS_BY_HAND);
+    salinityOutOfRange = false;
   } else {
     // Disable motor
     int enablePin = MOT_A_EN;
@@ -445,6 +525,7 @@ void operateMotorPumpWithSwitches3and4() {
     int enablePin = MOT_B_EN;
     digitalWrite(enablePin, LOW);
     activate_motor(MOTOR_B, COMPRESS, STEPS_BY_HAND);
+    salinityOutOfRange = false;
   } else {
     int enablePin = MOT_B_EN;
     digitalWrite(enablePin, HIGH);
@@ -453,17 +534,21 @@ void operateMotorPumpWithSwitches3and4() {
 
 void loop() {
   // check temp
-  // tempOperations();
+  tempOperations();
 
   // check salinity
-  if (!isSucking())
-    salinityOperations();
+  salinityOperations();
 
   // readAndPrintTemp(); // working (can be used as unit test)
   // readAndPrintSalinity();  // working (can be used as unit test)
   // readAndPrintSwitches3and4();  // working (can be used as unit test) -> will use for pumps
-  // operateMotorSuckWithSwitches3and4();
-  operateMotorPumpWithSwitches3and4();
+  if (digitalRead(SWITCH2)) {
+    // Serial.println("SWITCH2 ON");
+    operateMotorPumpWithSwitches3and4();
+  } else {
+    // Serial.println("SWITCH2 OFF");
+    operateMotorSuckWithSwitches3and4();
+  }
   // readAndPrintSwitch2();  // working (can be used as unit test) -> will use for heater
   // testMotorsOperation(); // working (can be used as unit test) TODO set it up to work with switches
   // testHeaterOperation(); // working with Switch 2 (can be used as unit test)
