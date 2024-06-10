@@ -437,7 +437,7 @@ void activate_motor(bool motorId, bool direction, int number_of_steps) {
   }
   
   if (motorId == SALT_PUMP)
-    isSaltPUmpAtLimit = false;
+    isSaltPumpAtLimit = false;
   if (motorId == FRESH_PUMP)
     isFreshPumpAtLimit = false;
 
