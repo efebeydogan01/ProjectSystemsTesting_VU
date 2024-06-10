@@ -406,6 +406,10 @@ void testMotorsOperation() {
   activate_motor(MOTOR_B, DECOMPRESS, NUMBER_OF_STEPS);
 }
 
+bool isSucking() {
+  return !digitalRead(SWITCH3) || !digitalRead(SWITCH4);
+}
+
 void operateMotorSuckWithSwitches3and4() {
   lcd.setCursor(0, 0);
   if (!digitalRead(SWITCH3)) {  // sw3 press
@@ -422,7 +426,6 @@ void operateMotorSuckWithSwitches3and4() {
   }
   
 }
-
 
 void operateMotorPumpWithSwitches3and4() {
   // lcd.setCursor(0, 0);
@@ -453,7 +456,8 @@ void loop() {
   // tempOperations();
 
   // check salinity
-  // salinityOperations();
+  if (!isSucking())
+    salinityOperations();
 
   // readAndPrintTemp(); // working (can be used as unit test)
   // readAndPrintSalinity();  // working (can be used as unit test)
