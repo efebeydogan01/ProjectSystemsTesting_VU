@@ -1,7 +1,7 @@
 #include <math.h>
 #include "Adafruit_LiquidCrystal.h"
 
-// NOTE: Always start the prgoram with the switch 1 down and bring back the syringes to most back, then turn switch 1 up
+// NOTE: Always start the prgoram with the switch 1 down and birng back the syringes to most back, then turn switch 1 up
 // Wire connections:
 
 // For the Temperature sensor (blue cable):
@@ -101,8 +101,10 @@ Adafruit_LiquidCrystal lcd(0);
 
 long tempSize = 0;
 long salSize = 0;
+long salVOutSize = 0;
 double runningAvgTemp[maxSize];
 double runningAvgSal[maxSize];
+double runningAvgSalVout[maxSize];
 
 // int freshCyclesForward = 0;
 // int freshCyclesBackwards = 0;
@@ -112,8 +114,10 @@ int freshPumpPosition = 0;
 int salinePumpPosition = 0;
 double curVolume = 0;
 bool salinityOutOfRange = false;
-bool isFreshPumpAtLimit = false;
-bool isSaltPumpAtLimit = false;
+bool isPumpAtLimit = false;
+
+double salFormulaA = 15.1747217178;
+double salFormulaB = -2.89491343498;
 
 void cleanLCDArea(int rowPos, int row, int numSpaces) {
   char* buf = new char[numSpaces + 1];
@@ -154,8 +158,19 @@ double getSalinity(int salSensorVal) {
   double Vout = Varduino * (5.0 / 3.0);
   // double salinity = 15.1747217178 * Vout - 2.89491343498;  // more accurate way
   // if (salinity < 0) salinity = 0;
-  double salinity = 16.3 * Vout;  // less accurate way
+  // double salinity = 16.3 * Vout;  // less accurate way
+  double salinity = salFormulaA * Vout + salFormulaB;  // more accurate way with calibration
+  if (salinity < 0) salinity = 0;
   return salinity;
+}
+
+
+void readRawSalinity() {
+  int salSensorVal = analogRead(SAL_SENSOR);
+  double Varduino = salSensorVal * (3.3 / 1024.0);  // convert to voltage (0-3.3V)
+  double Vout = Varduino * (5.0 / 3.0);
+  // double salinity = getSalinity(salSensor);
+  addToArr(runningAvgSalVout, Vout, salVOutSize);
 }
 
 double readSalinity() {
@@ -194,7 +209,7 @@ void salinityOperations() {
     if (curSal < SAL_LOWER_BOUND) {
       // lcd.setCursor(7, 0);
       // lcd.print("|Sal low!");
-      if (!isSaltPumpAtLimit) {
+      if (!isPumpAtLimit) {
         lcd.setCursor(7, 1);
         lcd.print("|Add salt");
       }
@@ -214,7 +229,7 @@ void salinityOperations() {
     } else {
       // lcd.setCursor(7, 0);
       // lcd.print("|Sal hi!");
-      if (!isFreshPumpAtLimit) {
+      if (!isPumpAtLimit) {
         lcd.setCursor(7, 1);
         lcd.print("|Add fres");
       }
@@ -294,6 +309,110 @@ void readAndPrintTemp() {
   Serial.println(tempAverage, 3);
 }
 
+
+void calibrateSalSensor() {
+  Serial.println("TEST");
+  // prompt user for 15 seconds to dip sensor in 5ppt
+  lcd.setCursor(0, 0);
+  lcd.print("Dip sensor in");
+  lcd.setCursor(0, 1);
+  lcd.print("5ppt within 15\"");
+  // delay(15000);
+
+  for (int i = 30; i > 0; i--) {
+    cleanLCDArea(0, 1, 16);
+    lcd.setCursor(0, 1);
+    lcd.print("5ppt within ");
+    lcd.print(i);
+    lcd.print("\"");
+    delay(1000);  // Delay for 1 second
+  }
+  lcd.clear();
+
+
+  lcd.clear();
+  lcd.print("Reading...");
+
+  // read 30 Vout values
+  for (int i = 0; i < maxSize; i++) {
+    readRawSalinity();
+  }
+    // testing
+  for (int j = 0; j < maxSize; j++) {
+    Serial.print(runningAvgSalVout[j]);
+    Serial.print(" ");
+  }
+  Serial.println();
+  double salVoutAverage5ppt = calculateAvg(runningAvgSalVout, salVOutSize);
+  delay(2000);
+  Serial.print("VOUT 5: ");
+  Serial.println(salVoutAverage5ppt);
+
+  // prompt user for 15 seconds to dip sensor in 15ppt
+  lcd.setCursor(0, 0);
+  lcd.print("Dip sensor in");
+  // lcd.setCursor(0, 1);
+  // lcd.print("15ppt within 15\"");
+  // delay(15000);
+
+  for (int i = 30; i > 0; i--) {
+    cleanLCDArea(0, 1, 16);
+    lcd.setCursor(0, 1);
+    lcd.print("15ppt within ");
+    lcd.print(i);
+    lcd.print("\"");
+    delay(1000);  // Delay for 1 second
+  }
+  lcd.clear();
+
+  lcd.clear();
+  lcd.print("Reading...");
+
+  // read 30 Vout values
+  for (int i = 0; i < maxSize; i++) {
+    readRawSalinity();
+  }
+  // testing
+  for (int j = 0; j < maxSize; j++) {
+    Serial.print(runningAvgSalVout[j]);
+    Serial.print(" ");
+  }
+  Serial.println();
+  double salVoutAverage15ppt = calculateAvg(runningAvgSalVout, salVOutSize);
+  delay(2000);
+  Serial.print("VOUT 15: ");
+  Serial.println(salVoutAverage15ppt);
+
+  // calculate a and b values for the salinity formula
+  salFormulaA = 5 / (salVoutAverage15ppt - salVoutAverage5ppt);
+  salFormulaB = salFormulaA * salVoutAverage15ppt - 15;
+
+  Serial.print("SAL A: ");
+  Serial.print(salFormulaA);
+  Serial.print(" SAL B: ");
+  Serial.println(salFormulaB);
+
+  // prompt user for 15 seconds to replace beaker
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Calibration ok");
+  // lcd.setCursor(0, 1);
+  // lcd.print("Repl beak in 15\"");
+  // delay(15000);
+
+  for (int i = 30; i > 0; i--) {
+    cleanLCDArea(0, 1, 16);
+    lcd.setCursor(0, 1);
+    lcd.print("Repl beak in ");
+    lcd.print(i);
+    lcd.print("\"");
+    delay(1000);  // Delay for 1 second
+  }
+  lcd.clear();
+
+  lcd.clear();
+}
+
 void setup() {
   Serial.begin(115200);
   // while(!Serial);
@@ -320,6 +439,9 @@ void setup() {
 
   if (!HEATER_ENABLED)
     digitalWrite(HEATER, LOW);
+
+
+  calibrateSalSensor();
 }
 
 void readAndPrintSwitches3and4() {
@@ -428,18 +550,11 @@ void activate_motor(bool motorId, bool direction, int number_of_steps) {
   }
 
   if (number_of_steps == 0) {
-    if (motorId == SALT_PUMP)
-      isSaltPUmpAtLimit = true;
-    if (motorId == FRESH_PUMP)
-      isFreshPumpAtLimit = true;
+    isPumpAtLimit = true;
     printLimit();
     return;
   }
-  
-  if (motorId == SALT_PUMP)
-    isSaltPumpAtLimit = false;
-  if (motorId == FRESH_PUMP)
-    isFreshPumpAtLimit = false;
+  isPumpAtLimit = false;
 
   if (direction == COMPRESS && curVolume + ONE_STEP_VOL * number_of_steps >= MAX_VOL_ADDITION) {
     lcd.setCursor(7, 0);
@@ -541,22 +656,21 @@ void operateMotorPumpWithSwitches3and4() {
 }
 
 void loop() {
+  // return;
   // check temp
-  tempOperations();
+  // tempOperations();
 
-  // check salinity
-  salinityOperations();
+  // // check salinity
+  // salinityOperations();
 
   // readAndPrintTemp(); // working (can be used as unit test)
-  // readAndPrintSalinity();  // working (can be used as unit test)
+  readAndPrintSalinity();  // working (can be used as unit test)
   // readAndPrintSwitches3and4();  // working (can be used as unit test) -> will use for pumps
-  if (digitalRead(SWITCH2)) {
-    // Serial.println("SWITCH2 ON");
-    operateMotorPumpWithSwitches3and4();
-  } else {
-    // Serial.println("SWITCH2 OFF");
-    operateMotorSuckWithSwitches3and4();
-  }
+  // if (digitalRead(SWITCH2)) {
+  //   operateMotorPumpWithSwitches3and4();
+  // } else {
+  //   operateMotorSuckWithSwitches3and4();
+  // }
   // readAndPrintSwitch2();  // working (can be used as unit test) -> will use for heater
   // testMotorsOperation(); // working (can be used as unit test) TODO set it up to work with switches
   // testHeaterOperation(); // working with Switch 2 (can be used as unit test)
@@ -567,10 +681,10 @@ void loop() {
   // Serial.print(salineCyclesForward);
   // Serial.print(" Saline back: ");
   // Serial.println(salineCyclesBackwards);
-  Serial.print("Fresh pos: ");
-  Serial.print(freshPumpPosition);
-  Serial.print(" Saline pos: ");
-  Serial.print(salinePumpPosition);
-  Serial.print(" Current vol added: ");
-  Serial.println(curVolume);
+  // Serial.print("Fresh pos: ");
+  // Serial.print(freshPumpPosition);
+  // Serial.print(" Saline pos: ");
+  // Serial.print(salinePumpPosition);
+  // Serial.print(" Current vol added: ");
+  // Serial.println(curVolume);
 }
