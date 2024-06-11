@@ -311,7 +311,7 @@ void readAndPrintTemp() {
 
 
 void calibrateSalSensor() {
-  Serial.println("TEST");
+  // Serial.println("TEST");
   // prompt user for 15 seconds to dip sensor in 5ppt
   lcd.setCursor(0, 0);
   lcd.print("Dip sensor in");
@@ -338,15 +338,15 @@ void calibrateSalSensor() {
     readRawSalinity();
   }
     // testing
-  for (int j = 0; j < maxSize; j++) {
-    Serial.print(runningAvgSalVout[j]);
-    Serial.print(" ");
-  }
-  Serial.println();
+  // for (int j = 0; j < maxSize; j++) {
+  //   Serial.print(runningAvgSalVout[j]);
+  //   Serial.print(" ");
+  // }
+  // Serial.println();
   double salVoutAverage5ppt = calculateAvg(runningAvgSalVout, salVOutSize);
   delay(2000);
-  Serial.print("VOUT 5: ");
-  Serial.println(salVoutAverage5ppt);
+  // Serial.print("VOUT 5: ");
+  // Serial.println(salVoutAverage5ppt);
 
   // prompt user for 15 seconds to dip sensor in 15ppt
   lcd.setCursor(0, 0);
@@ -373,19 +373,19 @@ void calibrateSalSensor() {
     readRawSalinity();
   }
   // testing
-  for (int j = 0; j < maxSize; j++) {
-    Serial.print(runningAvgSalVout[j]);
-    Serial.print(" ");
-  }
-  Serial.println();
+  // for (int j = 0; j < maxSize; j++) {
+  //   Serial.print(runningAvgSalVout[j]);
+  //   Serial.print(" ");
+  // }
+  // Serial.println();
   double salVoutAverage15ppt = calculateAvg(runningAvgSalVout, salVOutSize);
   delay(2000);
-  Serial.print("VOUT 15: ");
-  Serial.println(salVoutAverage15ppt);
+  // Serial.print("VOUT 15: ");
+  // Serial.println(salVoutAverage15ppt);
 
   // calculate a and b values for the salinity formula
-  salFormulaA = 5 / (salVoutAverage15ppt - salVoutAverage5ppt);
-  salFormulaB = salFormulaA * salVoutAverage15ppt - 15;
+  salFormulaA = 10 / (salVoutAverage15ppt - salVoutAverage5ppt);
+  salFormulaB = 15 - salFormulaA * salVoutAverage15ppt;
 
   Serial.print("SAL A: ");
   Serial.print(salFormulaA);
@@ -440,7 +440,7 @@ void setup() {
   if (!HEATER_ENABLED)
     digitalWrite(HEATER, LOW);
 
-
+  delay(1000);
   calibrateSalSensor();
 }
 
