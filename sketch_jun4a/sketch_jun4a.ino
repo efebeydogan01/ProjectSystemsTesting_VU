@@ -311,13 +311,9 @@ void readAndPrintTemp() {
 
 
 void calibrateSalSensor() {
-  // Serial.println("TEST");
   // prompt user for 15 seconds to dip sensor in 5ppt
   lcd.setCursor(0, 0);
   lcd.print("Dip sensor in");
-  lcd.setCursor(0, 1);
-  lcd.print("5ppt within 15\"");
-  // delay(15000);
 
   for (int i = 30; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
@@ -351,9 +347,6 @@ void calibrateSalSensor() {
   // prompt user for 15 seconds to dip sensor in 15ppt
   lcd.setCursor(0, 0);
   lcd.print("Dip sensor in");
-  // lcd.setCursor(0, 1);
-  // lcd.print("15ppt within 15\"");
-  // delay(15000);
 
   for (int i = 30; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
@@ -656,21 +649,21 @@ void operateMotorPumpWithSwitches3and4() {
 }
 
 void loop() {
-  // return;
   // check temp
-  // tempOperations();
+  tempOperations();
 
-  // // check salinity
-  // salinityOperations();
+  // check salinity
+  salinityOperations();
 
   // readAndPrintTemp(); // working (can be used as unit test)
-  readAndPrintSalinity();  // working (can be used as unit test)
+  // readAndPrintSalinity();  // working (can be used as unit test)
   // readAndPrintSwitches3and4();  // working (can be used as unit test) -> will use for pumps
-  // if (digitalRead(SWITCH2)) {
-  //   operateMotorPumpWithSwitches3and4();
-  // } else {
-  //   operateMotorSuckWithSwitches3and4();
-  // }
+  if (digitalRead(SWITCH2)) {
+    operateMotorPumpWithSwitches3and4();
+  } else {
+    operateMotorSuckWithSwitches3and4();
+  }
+
   // readAndPrintSwitch2();  // working (can be used as unit test) -> will use for heater
   // testMotorsOperation(); // working (can be used as unit test) TODO set it up to work with switches
   // testHeaterOperation(); // working with Switch 2 (can be used as unit test)
