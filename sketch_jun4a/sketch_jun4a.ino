@@ -49,7 +49,7 @@
 #define K1 0.000222468
 #define K2 1.33342e-7
 #define kelvin 273.15
-#define maxSize 30
+#define maxSize 5000
 #define salConst1 15.1747217178
 #define salConst2 2.89491343498
 
@@ -106,9 +106,9 @@ Adafruit_LiquidCrystal lcd(0);
 long tempSize = 0;
 long salSize = 0;
 long salVOutSize = 0;
-double runningAvgTemp[maxSize];
-double runningAvgSal[maxSize];
-double runningAvgSalVout[maxSize];
+double* runningAvgTemp = new double[maxSize];
+double* runningAvgSal = new double[maxSize];
+double* runningAvgSalVout = new double[maxSize];
 
 // int freshCyclesForward = 0;
 // int freshCyclesBackwards = 0;
