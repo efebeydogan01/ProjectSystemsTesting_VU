@@ -71,7 +71,9 @@
 
 #define STEP_DELAY 1000
 #define NUMBER_OF_STEPS 10000
-#define STEPS_BY_HAND 1000
+#define STEPS_BY_HAND 2000
+#define STEPS_BY_HAND_SETUP_SUCK 1000
+#define STEPS_BY_HAND_NORMAL_SUCK 42000
 
 #define MOTOR_A 0
 #define MOTOR_B 1
@@ -95,6 +97,8 @@
 #define MAX_VOL_ADDITION 300
 
 #define HEATER_ENABLED true
+
+#define CALIBRATION_DURATION 15
 
 // Connect via i2c, default address #0 (A0-A2 not jumpered)
 Adafruit_LiquidCrystal lcd(0);
@@ -315,7 +319,7 @@ void calibrateSalSensor() {
   lcd.setCursor(0, 0);
   lcd.print("Dip sensor in");
 
-  for (int i = 30; i > 0; i--) {
+  for (int i = CALIBRATION_DURATION; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
     lcd.setCursor(0, 1);
     lcd.print("5ppt within ");
@@ -333,7 +337,7 @@ void calibrateSalSensor() {
   for (int i = 0; i < maxSize; i++) {
     readRawSalinity();
   }
-    // testing
+  // testing
   // for (int j = 0; j < maxSize; j++) {
   //   Serial.print(runningAvgSalVout[j]);
   //   Serial.print(" ");
@@ -348,7 +352,7 @@ void calibrateSalSensor() {
   lcd.setCursor(0, 0);
   lcd.print("Dip sensor in");
 
-  for (int i = 30; i > 0; i--) {
+  for (int i = CALIBRATION_DURATION; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
     lcd.setCursor(0, 1);
     lcd.print("15ppt within ");
@@ -393,7 +397,7 @@ void calibrateSalSensor() {
   // lcd.print("Repl beak in 15\"");
   // delay(15000);
 
-  for (int i = 30; i > 0; i--) {
+  for (int i = CALIBRATION_DURATION; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
     lcd.setCursor(0, 1);
     lcd.print("Repl beak in ");
@@ -610,14 +614,20 @@ void operateMotorSuckWithSwitches3and4() {
                                 // lcd.print("SW3 HIGH");
                                 // Enable motor
     // digitalWrite(MOT_A_EN, LOW);
-    activate_motor(MOTOR_A, DECOMPRESS, STEPS_BY_HAND);
+    if (!isSwitch1Down())
+      activate_motor(MOTOR_A, DECOMPRESS, STEPS_BY_HAND_NORMAL_SUCK);
+    else
+      activate_motor(MOTOR_A, DECOMPRESS, STEPS_BY_HAND_SETUP_SUCK);
     salinityOutOfRange = false;
   }
 
   if (!digitalRead(SWITCH4)) {  // sw4 press
                                 // lcd.print("SW4 HIGH");
     // digitalWrite(MOT_B_EN, LOW);
-    activate_motor(MOTOR_B, DECOMPRESS, STEPS_BY_HAND);
+    if (!isSwitch1Down())
+      activate_motor(MOTOR_B, DECOMPRESS, STEPS_BY_HAND_NORMAL_SUCK);
+    else
+      activate_motor(MOTOR_B, DECOMPRESS, STEPS_BY_HAND_SETUP_SUCK);
     salinityOutOfRange = false;
   }
 }
@@ -648,6 +658,32 @@ void operateMotorPumpWithSwitches3and4() {
   }
 }
 
+void checkBringBackSyringes() {
+  if (freshPumpPosition == MAX_STEPS) {
+    salinityOutOfRange = false;
+    lcd.setCursor(7, 0);
+    lcd.print("|ADJ VALV");
+    delay(5000);
+    lcd.setCursor(7, 1);
+    lcd.print("|SUCKING ");
+    activate_motor(MOTOR_A, DECOMPRESS, STEPS_BY_HAND_NORMAL_SUCK);
+    cleanLCDArea(7, 0, 9);
+    cleanLCDArea(7, 1, 9);
+  }
+
+  if (salinePumpPosition == MAX_STEPS) {
+    salinityOutOfRange = false;
+    lcd.setCursor(7, 0);
+    lcd.print("|ADJ VALV");
+    delay(5000);
+    lcd.setCursor(7, 1);
+    lcd.print("|SUCKING ");
+    activate_motor(MOTOR_B, DECOMPRESS, STEPS_BY_HAND_NORMAL_SUCK);
+    cleanLCDArea(7, 0, 9);
+    cleanLCDArea(7, 1, 9);
+  }
+}
+
 void loop() {
   // check temp
   tempOperations();
@@ -663,6 +699,8 @@ void loop() {
   } else {
     operateMotorSuckWithSwitches3and4();
   }
+
+  checkBringBackSyringes();
 
   // readAndPrintSwitch2();  // working (can be used as unit test) -> will use for heater
   // testMotorsOperation(); // working (can be used as unit test) TODO set it up to work with switches
