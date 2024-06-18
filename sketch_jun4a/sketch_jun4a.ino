@@ -353,7 +353,7 @@ void calibrateSalSensor() {
   for (int i = CALIBRATION_DURATION; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
     lcd.setCursor(0, 1);
-    lcd.print("5ppt within ");
+    lcd.print("10ppt within ");
     lcd.print(i);
     lcd.print("\"");
     delay(1000);  // Delay for 1 second
@@ -374,7 +374,7 @@ void calibrateSalSensor() {
   //   Serial.print(" ");
   // }
   // Serial.println();
-  double salVoutAverage5ppt = calculateAvg(runningAvgSalVout, salVOutSize);
+  double salVoutAverage10ppt = calculateAvg(runningAvgSalVout, salVOutSize);
   delay(2000);
   // Serial.print("VOUT 5: ");
   // Serial.println(salVoutAverage5ppt);
@@ -386,7 +386,7 @@ void calibrateSalSensor() {
   for (int i = CALIBRATION_DURATION; i > 0; i--) {
     cleanLCDArea(0, 1, 16);
     lcd.setCursor(0, 1);
-    lcd.print("15ppt within ");
+    lcd.print("20ppt within ");
     lcd.print(i);
     lcd.print("\"");
     delay(1000);  // Delay for 1 second
@@ -406,14 +406,14 @@ void calibrateSalSensor() {
   //   Serial.print(" ");
   // }
   // Serial.println();
-  double salVoutAverage15ppt = calculateAvg(runningAvgSalVout, salVOutSize);
+  double salVoutAverage20ppt = calculateAvg(runningAvgSalVout, salVOutSize);
   delay(2000);
   // Serial.print("VOUT 15: ");
   // Serial.println(salVoutAverage15ppt);
 
   // calculate a and b values for the salinity formula
-  salFormulaA = 10 / (salVoutAverage15ppt - salVoutAverage5ppt);
-  salFormulaB = 15 - salFormulaA * salVoutAverage15ppt;
+  salFormulaA = 10 / (salVoutAverage20ppt - salVoutAverage10ppt);
+  salFormulaB = 10 - salFormulaA * salVoutAverage10ppt;
 
   Serial.print("SAL A: ");
   Serial.print(salFormulaA);
