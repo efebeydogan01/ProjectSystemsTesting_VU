@@ -188,28 +188,41 @@ double readSalinity() {
 
 void readAndPrintSalinity() {
   double salAverage = readSalinity();
-
-  // Serial.print("Salinity: ");
-  // Serial.println(salAverage, 3);
+  int salSensor = analogRead(SAL_SENSOR);
   lcd.setCursor(0, 1);
-  lcd.print("Salinity: ");
-  lcd.print(salAverage);
+  lcd.print("Sal: ");
+  lcd.print(salSensor);
+  Serial.print("Salinity: ");
+  Serial.println(salAverage, 3);
+  Serial.println(salSensor);
+  // cleanLCDArea(0, 1, 16);
 }
 
 void salinityOperations() {
   double curSal = readSalinity();
+
+  if (curSal < 2) {
+    cleanLCDArea(7, 0, 9);
+    lcd.setCursor(7, 0);
+    lcd.print("|Snsr err");
+    // delay(2000);
+    // cleanLCDArea(7, 0, 9);
+    return;
+  }
+
   // String formatSal = String(curSal, 1);
+  cleanLCDArea(7, 0, 9);
   lcd.setCursor(7, 0);
   lcd.print("|S: ");
   lcd.print(curSal);
   lcd.print(" ");
-  Serial.print("SW3-4: ");
-  Serial.print(isSwitch3or4Down());
-  Serial.print(" SW1: ");
-  Serial.println(isSwitch1Down());
+  // Serial.print("SW3-4: ");
+  // Serial.print(isSwitch3or4Down());
+  // Serial.print(" SW1: ");
+  // Serial.println(isSwitch1Down());
 
   if (!isSwitch3or4Down() && !isSwitch1Down()) {
-    Serial.println("IF");
+    // Serial.println("IF");
     if (curSal < SAL_LOWER_BOUND) {
       // lcd.setCursor(7, 0);
       // lcd.print("|Sal low!");
@@ -275,6 +288,20 @@ double readTemp() {
 
 void tempOperations() {
   double curTemp = readTemp();
+
+  if (curTemp < -50) {
+    cleanLCDArea(0, 0, 7);
+    lcd.setCursor(0, 0);
+    lcd.print("Snsr er");
+    lcd.setCursor(0, 1);
+    lcd.print("Htr off");
+    // delay(2000);
+    // cleanLCDArea(0, 0, 7);
+    digitalWrite(HEATER, LOW);
+    return;
+  }
+
+  cleanLCDArea(0, 0, 7);
   String formatTemp = String(curTemp, 1);
   lcd.setCursor(0, 0);
   lcd.print("T: ");
@@ -305,12 +332,16 @@ void tempOperations() {
 
 void readAndPrintTemp() {
   double tempAverage = readTemp();
+  int tempSensor = analogRead(TEMP_SENSOR);
 
   lcd.setCursor(0, 0);
-  lcd.print("Temperat: ");
-  lcd.print(tempAverage);
+  lcd.print("Tem: ");
+  // lcd.print(tempAverage);
+  lcd.print(tempSensor);
   Serial.print("Temperature: ");
   Serial.println(tempAverage, 3);
+  Serial.println(tempSensor);
+  // cleanLCDArea(0, 0, 16);
 }
 
 
@@ -691,8 +722,10 @@ void loop() {
   // check salinity
   salinityOperations();
 
-  // readAndPrintTemp(); // working (can be used as unit test)
+  // lcd.clear();
+  // readAndPrintTemp();      // working (can be used as unit test)
   // readAndPrintSalinity();  // working (can be used as unit test)
+  // delay(1000);
   // readAndPrintSwitches3and4();  // working (can be used as unit test) -> will use for pumps
   if (digitalRead(SWITCH2)) {
     operateMotorPumpWithSwitches3and4();
