@@ -99,6 +99,9 @@
 #define HEATER_ENABLED true
 
 #define CALIBRATION_DURATION 15
+#define VARIANCE_THRESH 2
+#define TEMP_SNSR_THRESH -50
+#define SAL_SNSR_THRESH 2
 
 // Connect via i2c, default address #0 (A0-A2 not jumpered)
 Adafruit_LiquidCrystal lcd(0);
@@ -177,6 +180,18 @@ void readRawSalinity() {
   addToArr(runningAvgSalVout, Vout, salVOutSize);
 }
 
+double readSalinityOnce() {
+  int salSensor = analogRead(SAL_SENSOR);
+  double salinity = getSalinity(salSensor);
+  return salinity;
+}
+
+double readTemperatureOnce() {
+  int tempSensor = analogRead(TEMP_SENSOR);
+  double temperature = getTemp(tempSensor);
+  return temperature;
+}
+
 double readSalinity() {
   int salSensor = analogRead(SAL_SENSOR);
   double salinity = getSalinity(salSensor);
@@ -198,15 +213,42 @@ void readAndPrintSalinity() {
   // cleanLCDArea(0, 1, 16);
 }
 
+double variance(double* a, int n) {
+  // Compute mean (average of elements)
+  double sum = 0;
+
+  for (int i = 0; i < n; i++) sum += a[i];
+  double mean = (double)sum / (double)n;
+  // Compute sum squared differences with mean.
+  double sqDiff = 0;
+  for (int i = 0; i < n; i++)
+    sqDiff += (a[i] - mean) * (a[i] - mean);
+  return (double)sqDiff / n;
+}
+
 void salinityOperations() {
   double curSal = readSalinity();
 
-  if (curSal < 2) {
+  double vrnc = variance(runningAvgSal, salSize < maxSize ? salSize : maxSize);
+  // Serial.print("Variance: ");
+  // Serial.println(vrnc);
+
+  if (vrnc > VARIANCE_THRESH) {
     cleanLCDArea(7, 0, 9);
+    return;
+  }
+
+  if (readSalinityOnce() < SAL_SNSR_THRESH) {
+    cleanLCDArea(7, 0, 9);
+    cleanLCDArea(7, 1, 9);
     lcd.setCursor(7, 0);
     lcd.print("|Snsr err");
     // delay(2000);
     // cleanLCDArea(7, 0, 9);
+    // delay(2000);
+    // for (int i = 0; i < 30; i++) {
+    //   readSalinity();
+    // }
     return;
   }
 
@@ -243,6 +285,7 @@ void salinityOperations() {
       // activate_motor(MOTOR_B, DECOMPRESS, NUMBER_OF_STEPS);
     } else if (curSal >= SAL_LOWER_BOUND && curSal <= SAL_UPPER_BOUND) {
       salinityOutOfRange = false;
+      cleanLCDArea(7, 1, 9);
     } else {
       // lcd.setCursor(7, 0);
       // lcd.print("|Sal hi!");
@@ -289,8 +332,9 @@ double readTemp() {
 void tempOperations() {
   double curTemp = readTemp();
 
-  if (curTemp < -50) {
+  if (readTemperatureOnce() < TEMP_SNSR_THRESH) {
     cleanLCDArea(0, 0, 7);
+    cleanLCDArea(0, 1, 7);
     lcd.setCursor(0, 0);
     lcd.print("Snsr er");
     lcd.setCursor(0, 1);
