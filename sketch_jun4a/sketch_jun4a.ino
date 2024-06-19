@@ -109,9 +109,11 @@ Adafruit_LiquidCrystal lcd(0);
 long tempSize = 0;
 long salSize = 0;
 long salVOutSize = 0;
+long tempAveragesSize = 0;
 double runningAvgTemp[maxSize];
 double runningAvgSal[maxSize];
 double runningAvgSalVout[maxSize];
+double tempAverages[maxSize];
 
 // int freshCyclesForward = 0;
 // int freshCyclesBackwards = 0;
@@ -121,10 +123,15 @@ int freshPumpPosition = 0;
 int salinePumpPosition = 0;
 double curVolume = 0;
 bool salinityOutOfRange = false;
+bool tempLowerThan30First = true;
 bool isPumpAtLimit = false;
 
 double salFormulaA = 15.1747217178;
 double salFormulaB = -2.89491343498;
+
+unsigned long previousMillisTemp = 0;  // Store the last time the calculation was performed
+const long intervalTemp = 60000;       // Interval at which to perform the calculation (in milliseconds)
+double prevTemp;
 
 void cleanLCDArea(int rowPos, int row, int numSpaces) {
   char* buf = new char[numSpaces + 1];
@@ -326,6 +333,12 @@ double readTemp() {
   addToArr(runningAvgTemp, temperature, tempSize);
   double tempAverage = calculateAvg(runningAvgTemp, tempSize);
 
+  // unsigned long currentMillis = millis();
+  // if (currentMillis - previousMillisTemp >= intervalTemp) {
+  //   previousMillisTemp = currentMillis;
+  //   addToArr(tempAverages, tempAverage, tempAveragesSize);
+  // }
+
   return tempAverage;
 }
 
@@ -352,13 +365,31 @@ void tempOperations() {
   lcd.print(formatTemp);
 
   if (HEATER_ENABLED) {
+    // COMMENT THIS OUT IF IT CAUSES BUGS
     if (curTemp < TEMP_LOWER_BOUND) {
+      if (tempLowerThan30First) {
+        tempLowerThan30First = false;
+        previousMillisTemp = millis();
+        prevTemp = readTemp();
+      }
+
+      if (millis() - previousMillisTemp >= intervalTemp) {
+        if (readTemp() <= prevTemp + 1) {
+          cleanLCDArea(0, 1, 7);
+          lcd.setCursor(0, 1);
+          lcd.print("No htr!");
+          return;
+        }
+      }
+      /////////////////////////////////////////////////////////
+
       // lcd.setCursor(0, 0);
       // lcd.print("Tmp low");
       lcd.setCursor(0, 1);
       lcd.print("Htr on ");
       digitalWrite(HEATER, HIGH);
     } else if (TEMP_LOWER_BOUND <= curTemp && curTemp <= TEMP_UPPER_BOUND) {
+      tempLowerThan30First = true;
       digitalWrite(HEATER, LOW);
       // lcd.setCursor(0, 0);
       // lcd.print("Tmp nrml");
@@ -513,7 +544,7 @@ void setup() {
     digitalWrite(HEATER, LOW);
 
   delay(1000);
-  calibrateSalSensor();
+  // calibrateSalSensor();
 }
 
 void readAndPrintSwitches3and4() {
@@ -758,6 +789,43 @@ void checkBringBackSyringes() {
     cleanLCDArea(7, 1, 9);
   }
 }
+
+// double calculateTempSlope() {
+//   double sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+//   int n = tempAveragesSize <= maxSize ? tempAveragesSize : maxSize;
+//   // if (tempSize <= maxSize) {
+
+//   //   for (int i = 0; i < tempSize; i++) {
+//   //     sumX += i;
+//   //     sumY += tempAverages[i];
+//   //     sumXY += i * tempAverages[i];
+//   //     sumX2 += i * i;
+//   //   }
+//   // } else {
+
+//   //   for (int i = 0; i < maxSize; i++) {
+//   //     int currentIndex = (tempSize + i) % maxSize;
+//   //     sumX += currentIndex;
+//   //     sumY += tempAverages[currentIndex];
+//   //     sumXY += currentIndex * tempAverages[currentIndex];
+//   //     sumX2 += currentIndex * i;
+//   //   }
+//   // }
+
+//   for (int i = 0; i < maxSize; i++) {
+//     int currentIndex = (tempSize + i) % maxSize;
+//     Serial.print(tempAverages[currentIndex]);
+//     Serial.print(" ");
+//     sumX += currentIndex;
+//     sumY += tempAverages[currentIndex];
+//     sumXY += currentIndex * tempAverages[currentIndex];
+//     sumX2 += currentIndex * i;
+//   }
+//   Serial.println();
+
+//   double slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+//   return slope;
+// }
 
 void loop() {
   // check temp
