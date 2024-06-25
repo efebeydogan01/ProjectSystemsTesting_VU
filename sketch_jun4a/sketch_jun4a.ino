@@ -130,7 +130,7 @@ double salFormulaA = 15.1747217178;
 double salFormulaB = -2.89491343498;
 
 unsigned long previousMillisTemp = 0;  // Store the last time the calculation was performed
-const long intervalTemp = 60000;       // Interval at which to perform the calculation (in milliseconds)
+const long intervalTemp = 90000;       // Interval at which to perform the calculation (in milliseconds)
 double prevTemp;
 
 void cleanLCDArea(int rowPos, int row, int numSpaces) {
@@ -544,7 +544,7 @@ void setup() {
     digitalWrite(HEATER, LOW);
 
   delay(1000);
-  // calibrateSalSensor();
+  calibrateSalSensor();
 }
 
 void readAndPrintSwitches3and4() {
